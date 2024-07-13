@@ -85,5 +85,5 @@ ADD_EXAMPLE(11_composition)
 ADD_EXAMPLE(12_rt_pipeline)
 
 # standalone examples
-add_executable(standalone_multiwindow standalone_multiwindow.cpp)
-target_link_libraries(standalone_multiwindow PUBLIC vuk-example-framework)
+#add_executable(standalone_multiwindow standalone_multiwindow.cpp)
+#target_link_libraries(standalone_multiwindow PUBLIC vuk-example-framework)

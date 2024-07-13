@@ -1,5 +1,69 @@
 #include "example_runner.hpp"
 
+static bool foxfire_enable = false;
+
+namespace vuk {
+	namespace foxfire {
+		std::unordered_map<VkSwapchainKHR, ImGuiContext*> imgui_contexts;
+		constexpr auto presentation_tag = [](vuk::CommandBuffer&, VUK_IA(vuk::eColorWrite) color_rt) {
+			      return color_rt;
+		      };
+
+		Value<ImageAttachment> get_swapchain_image(Swapchain& swapchain) {
+			auto imported_swapchain = declare_swapchain(swapchain);
+			// acquire an image on the swapchain
+			return acquire_next_image("swp_img", std::move(imported_swapchain));
+		}
+
+		struct PresentingImage {
+			Ref image_ref;
+			Swapchain* swapchain;
+		};
+
+		void submit(UntypedValue& value, Allocator allocator, Compiler& compiler) {
+			// build info to see what we need presented
+			std::vector<PresentingImage> presenting_images;
+
+			for(auto& [img_ref, swapchain] : presenting_images) {
+				// make and activate an imgui context per presented image
+				auto it = imgui_contexts.find(swapchain->swapchain);
+				if (it == imgui_contexts.end()){
+					it = imgui_contexts.emplace(swapchain->swapchain, ImGui::CreateContext()).first;
+				}
+				ImGui::SetCurrentContext(it->second);
+				// render ui - show what we want to show
+				// pass view - noodle graph, where each box represents a pass and edges are resources
+				// resource view - resource versions in a tree view
+				// IR view - show various bits of IR and transformations
+
+				// render out imgui
+				ImGui::Render();
+				// we reroute the source image
+				// we will render the foxfire image to it, while we make an identical non-swapchain image for the std rendering
+
+				// render out gui
+				/*imgui = util::ImGui_ImplVuk_Render(allocator, std::move(cleared_image_to_render_into), imgui_data, ImGui::GetDrawData(), sampled_images);
+				// outer enqueue presentation
+				auto entire_thing = vuk::enqueue_presentation(std::move(imgui));
+				// outer submit
+				entire_thing.submit(allocator, compiler);*/
+			}
+		}
+
+		Value<ImageAttachment> enqueue_presentation(Value<ImageAttachment> value) {
+			// add a passthrough pass that lets us tag the value for "presentation"
+			auto pass = vuk::make_pass("presentation_tag", [](vuk::CommandBuffer&, VUK_IA(vuk::eColorWrite) color_rt) {
+			      return color_rt;
+		      });
+			return pass(value);
+		}
+
+		void render_resource_view(){
+
+		}
+	}
+}
+
 void vuk::ExampleRunner::render() {
 	Compiler compiler;
 	// the examples can all enqueue upload tasks via enqueue_setup. for simplicity, we submit and wait for all the upload tasks before moving on to the render
@@ -71,9 +135,9 @@ void vuk::ExampleRunner::render() {
 
 		// compile the IRModule that contains all the rendering of the example
 		// submit and present the results to the swapchain we imported previously
-		auto entire_thing = enqueue_presentation(std::move(example_result));
+		auto entire_thing = foxfire::enqueue_presentation(std::move(example_result));
 
-		entire_thing.submit(frame_allocator, compiler, { .callbacks = cbs });
+		foxfire::submit(entire_thing, frame_allocator, compiler);
 
 		// update window title with FPS
 		if (++num_frames == 16) {
@@ -83,6 +147,11 @@ void vuk::ExampleRunner::render() {
 			old_time = new_time;
 			num_frames = 0;
 			set_window_title(std::string("Vuk example [") + std::to_string(per_frame_time) + " ms / " + std::to_string(1000 / per_frame_time) + " FPS]");
+		}
+
+		// foxfire toggle
+		if(glfwGetKey(window, GLFW_KEY_EQUAL)) {
+			foxfire_enable = !foxfire_enable;
 		}
 	}
 }
